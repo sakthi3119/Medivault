@@ -1,0 +1,60 @@
+# Node.js
+node_modules/
+
+# Environment files
+.env
+.env.*
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+
+# Tailwind
+*.css.d.ts
+
+# Firebase
+firebase-debug.log
+
+# IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Misc
+*.tgz
+
+# Frontend build
+frontend/dist/
+
+# Backend build
+backend/dist/
+backend/build/
+
+# Others
+*.local
+*.cache
+
+# Mac system files
+Icon?
+
+# Windows system files
+Desktop.ini
+
