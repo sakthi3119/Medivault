@@ -9,6 +9,7 @@ import multer from "multer";
 import authRoutes from "./routes/authRoutes.js";
 import recordRoutes from "./routes/recordRoutes.js";
 import accessRoutes from "./routes/accessRoutes.js";
+import doctorRoutes from "./routes/doctorRoutes.js";
 import { AppError } from "./utils/appError.js";
 
 const app = express();
@@ -52,6 +53,7 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/records", recordRoutes);
 app.use("/api/access", accessRoutes);
+app.use("/api/doctors", doctorRoutes);
 
 app.all("*", (req, res, next) => next(new AppError("Route not found.", 404)));
 

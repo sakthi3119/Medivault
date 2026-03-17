@@ -3,6 +3,8 @@ import { UploadModal } from "../components/UploadModal.jsx";
 import { RecordCard } from "../components/RecordCard.jsx";
 import { useRecords } from "../hooks/useRecords";
 import { RECORD_TYPES } from "../utils/recordTypes";
+import { useAuth } from "../context/AuthContext.jsx";
+import api from "../api/axios";
 
 function StatPill({ label, value }) {
   return (
@@ -14,6 +16,80 @@ function StatPill({ label, value }) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  if (user?.role === "doctor") return <DoctorDashboard />;
+  return <PatientDashboard />;
+}
+
+function DoctorDashboard() {
+  const [tokens, setTokens] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const { data } = await api.get("/api/access/assigned");
+        setTokens(data.tokens || []);
+      } catch (err) {
+        setError(err?.response?.data?.message || "Failed to load assigned links.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-800/70 bg-surface/20 p-6 shadow-glow">
+        <div className="font-heading text-3xl italic">Doctor dashboard</div>
+        <div className="mt-2 text-sm text-slate-300">Share links assigned to you (active only).</div>
+
+        {error ? (
+          <div className="mt-4 rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-rose-100">{error}</div>
+        ) : null}
+
+        {loading ? <div className="mt-4 text-sm text-slate-300">Loading…</div> : null}
+
+        {!loading && tokens.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-slate-800/70 bg-background/25 px-4 py-3 text-sm text-slate-300">
+            No active links yet. Ask a patient to share records with you.
+          </div>
+        ) : null}
+
+        <div className="mt-5 space-y-3">
+          {tokens.map((t) => {
+            const url = `/shared/${t.token}`;
+            const patientName = t.patient?.name ? String(t.patient.name).split(/\s+/)[0] : "Patient";
+            const expires = t.expiresAt ? new Date(t.expiresAt).toLocaleString() : "—";
+            const count = t.allRecords ? "All records" : `${t.recordIds?.length || 0} record(s)`;
+            return (
+              <div key={t._id} className="rounded-2xl border border-slate-800/70 bg-background/25 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-100">{t.label || `Shared by ${patientName}`}</div>
+                    <div className="mt-1 text-xs text-slate-400">Expires: {expires}</div>
+                    <div className="mt-1 text-xs text-slate-500">{count}</div>
+                  </div>
+                  <a
+                    href={url}
+                    className="rounded-xl border border-slate-700/70 bg-background/40 px-3 py-2 text-xs text-slate-200 hover:bg-background/60"
+                  >
+                    Open
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PatientDashboard() {
   const [type, setType] = useState("All");
   const [search, setSearch] = useState("");
   const [page] = useState(1);

@@ -7,7 +7,7 @@ This README is written as a **learning + “judge Q&A prep” doc**. You can pas
 **MediVault** is a digital health record manager where:
 - A **patient** can **upload** medical records (PDF/image/DOCX) to Cloudinary, store metadata in MongoDB, and browse them in a dashboard + timeline.
 - A **patient** can generate **time-limited share links** (tokens) to share selected records (or all records) with a doctor via a **public read-only page**.
-- A **doctor** account exists for authentication/roles, but the current UI is primarily patient-focused (timeline/share are patient-only).
+- A **doctor** account exists for authentication/roles, but the current UI is primarily patient-focused; doctors view records via the **share link** page (read-only).
 
 ## Tech stack (free-tier friendly)
 
@@ -47,7 +47,7 @@ mediavault/
 
 ### Environment variables
 
-Create `backend/.env` (copy from `.env.example`) and set:
+Create `backend/.env` and set:
 - **`MONGODB_URI`**: MongoDB Atlas connection string (`mongodb://...` or `mongodb+srv://...`)
 - **`JWT_SECRET`**: secret string used to sign JWTs
 - **`JWT_EXPIRES_IN`**: JWT lifetime (e.g. `7d`)
@@ -116,11 +116,12 @@ Path: `backend/src/models/AccessToken.js`
 
 ### Cloudinary upload flow
 
-Path: `backend/src/config/cloudinary.js`
-- Uses `multer` + `multer-storage-cloudinary`
+Path: `backend/src/config/cloudinaryStorage.js`
+- Uses `multer` memory storage + Cloudinary `upload_stream`
 - Accepts: **JPG/PNG/PDF/DOCX**
 - Max size: **10MB**
 - Folder: `mediavault/{userId}`
+- Also deletes stored files on record delete (calls Cloudinary `uploader.destroy`) — your Cloudinary access key must allow **upload + delete** (not read-only).
 
 What happens on upload:
 1. Patient calls `POST /api/records` with `multipart/form-data`
@@ -181,7 +182,7 @@ What happens on upload:
 
 ### Environment variables
 
-Create `frontend/.env` (copy from `.env.example`) and set:
+Create `frontend/.env` and set:
 - **`VITE_API_URL`**: backend URL
   - local: `http://localhost:5000`
   - Render: `https://<your-service>.onrender.com`
@@ -291,7 +292,7 @@ Implementation:
 ## How to run locally
 
 ### Backend
-Copy `backend/.env.example` → `backend/.env` and fill env vars.
+Create `backend/.env` and fill env vars.
 
 ```bash
 cd mediavault/backend
@@ -303,7 +304,7 @@ Health check:
 - `GET http://localhost:5000/health`
 
 ### Frontend
-Copy `frontend/.env.example` → `frontend/.env`.
+Create `frontend/.env`.
 
 ```bash
 cd mediavault/frontend

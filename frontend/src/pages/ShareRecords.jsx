@@ -37,9 +37,12 @@ export default function ShareRecords() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
+  const [doctors, setDoctors] = useState([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
+
   const [allRecords, setAllRecords] = useState(true);
   const [selected, setSelected] = useState(new Set());
-  const [doctorEmail, setDoctorEmail] = useState("");
   const [label, setLabel] = useState("");
   const [expiresIn, setExpiresIn] = useState("24h");
   const [createdLink, setCreatedLink] = useState("");
@@ -63,6 +66,21 @@ export default function ShareRecords() {
     loadTokens();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      setLoadingDoctors(true);
+      try {
+        const { data } = await api.get("/api/doctors");
+        setDoctors(data.doctors || []);
+      } catch (err) {
+        // optional UX: if it fails, don't block sharing
+        setDoctors([]);
+      } finally {
+        setLoadingDoctors(false);
+      }
+    })();
+  }, []);
+
   async function createLink() {
     setCreating(true);
     setCreatedLink("");
@@ -71,7 +89,7 @@ export default function ShareRecords() {
       const payload = {
         allRecords,
         recordIds: allRecords ? [] : Array.from(selected),
-        doctorEmail: doctorEmail || undefined,
+        doctorId: selectedDoctorId || undefined,
         label: label || undefined,
         expiresIn,
       };
@@ -117,6 +135,7 @@ export default function ShareRecords() {
             {tokens.map((t) => {
               const url = `${window.location.origin}/shared/${t.token}`;
               const expired = isExpired(t.expiresAt) || t.isRevoked;
+              const doctor = t.doctor;
               return (
                 <div key={t._id} className="rounded-2xl border border-slate-800/70 bg-background/25 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -126,6 +145,15 @@ export default function ShareRecords() {
                       <div className="mt-1 text-xs text-slate-500">
                         {t.allRecords ? "All records" : `${t.recordIds?.length || 0} selected record(s)`} • Accessed {t.accessCount || 0} time(s)
                       </div>
+                      {doctor ? (
+                        <div className="mt-1 text-xs text-slate-400">
+                          Doctor: <span className="text-slate-200">{doctor.name}</span>
+                          {doctor.specialization ? <span className="text-slate-500"> • </span> : null}
+                          {doctor.specialization ? <span>{doctor.specialization}</span> : null}
+                          {doctor.hospitalName ? <span className="text-slate-500"> • </span> : null}
+                          {doctor.hospitalName ? <span className="text-slate-400">{doctor.hospitalName}</span> : null}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <CopyButton text={url} />
@@ -197,15 +225,56 @@ export default function ShareRecords() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm text-slate-200">Doctor email (optional)</label>
-                <input value={doctorEmail} onChange={(e) => setDoctorEmail(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-700/70 bg-background/35 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/30" placeholder="doctor@hospital.com" />
+            <div className="rounded-2xl border border-slate-800/70 bg-background/25 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Select doctor (optional)</div>
+                  <div className="mt-1 text-xs text-slate-400">Choose a registered doctor to associate with this link.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDoctorId("")}
+                  className="rounded-xl border border-slate-700/70 bg-background/35 px-3 py-2 text-xs text-slate-200 hover:bg-background/50"
+                >
+                  Clear
+                </button>
               </div>
-              <div>
-                <label className="text-sm text-slate-200">Label (optional)</label>
-                <input value={label} onChange={(e) => setLabel(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-700/70 bg-background/35 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/30" placeholder="Cardiology consult" />
+
+              {loadingDoctors ? <div className="mt-3 text-sm text-slate-300">Loading doctors…</div> : null}
+              {!loadingDoctors && doctors.length === 0 ? (
+                <div className="mt-3 text-sm text-slate-300">No doctors registered yet.</div>
+              ) : null}
+
+              <div className="mt-3 space-y-2">
+                {doctors.map((d) => (
+                  <label
+                    key={d._id}
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-800/60 bg-surface/20 px-4 py-3 hover:bg-surface/35"
+                  >
+                    <input
+                      type="radio"
+                      name="selectedDoctor"
+                      value={d._id}
+                      checked={selectedDoctorId === d._id}
+                      onChange={() => setSelectedDoctorId(d._id)}
+                      className="mt-1 h-4 w-4 accent-accent"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-100">{d.name}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">
+                        {d.specialization ? <span>{d.specialization}</span> : <span>—</span>}
+                        {d.hospitalName ? <span className="text-slate-500"> • </span> : null}
+                        {d.hospitalName ? <span className="text-slate-400">{d.hospitalName}</span> : null}
+                      </div>
+                    </div>
+                  </label>
+                ))}
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-slate-200">Label (optional)</label>
+              <input value={label} onChange={(e) => setLabel(e.target.value)} className="mt-2 w-full rounded-2xl border border-slate-700/70 bg-background/35 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/30" placeholder="Cardiology consult" />
             </div>
 
             <div>

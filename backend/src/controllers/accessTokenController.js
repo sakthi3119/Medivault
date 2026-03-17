@@ -2,11 +2,16 @@ import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { AccessToken } from "../models/AccessToken.js";
 import { Record } from "../models/Record.js";
+import { User } from "../models/User.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 
 function requirePatient(user) {
   if (user?.role !== "patient") throw new AppError("This action is only available for patient accounts.", 403);
+}
+
+function requireDoctor(user) {
+  if (user?.role !== "doctor") throw new AppError("This action is only available for doctor accounts.", 403);
 }
 
 function parseExpiresIn(value) {
@@ -29,7 +34,7 @@ function firstName(fullName) {
 export const createAccessToken = asyncHandler(async (req, res, next) => {
   requirePatient(req.user);
 
-  const { recordIds, allRecords = false, doctorEmail, label, expiresIn, expiresAt } = req.body || {};
+  const { recordIds, allRecords = false, doctorId, doctorEmail, label, expiresIn, expiresAt } = req.body || {};
 
   let exp = expiresAt ? new Date(expiresAt) : parseExpiresIn(expiresIn);
   if (!exp || Number.isNaN(exp.getTime())) return next(new AppError("Please choose a valid expiry duration.", 400));
@@ -48,9 +53,19 @@ export const createAccessToken = asyncHandler(async (req, res, next) => {
     validatedRecordIds = ids;
   }
 
+  let selectedDoctorId;
+  if (doctorId != null && String(doctorId).trim() !== "") {
+    const id = String(doctorId).trim();
+    if (!mongoose.isValidObjectId(id)) return next(new AppError("Invalid doctor selected.", 400));
+    const doctor = await User.findOne({ _id: id, role: "doctor", isActive: true }).select("_id");
+    if (!doctor) return next(new AppError("Selected doctor was not found.", 404));
+    selectedDoctorId = doctor._id;
+  }
+
   const token = uuidv4();
   const doc = await AccessToken.create({
     patient: req.user._id,
+    doctor: selectedDoctorId,
     token,
     recordIds: allRecords ? [] : validatedRecordIds,
     allRecords: Boolean(allRecords),
@@ -66,7 +81,8 @@ export const getMyTokens = asyncHandler(async (req, res) => {
   requirePatient(req.user);
   const tokens = await AccessToken.find({ patient: req.user._id })
     .sort({ createdAt: -1 })
-    .populate("recordIds", "title type recordDate doctorName hospitalName");
+    .populate("recordIds", "title type recordDate doctorName hospitalName")
+    .populate("doctor", "name email specialization hospitalName");
 
   res.json({ tokens });
 });
@@ -115,5 +131,21 @@ export const accessSharedRecords = asyncHandler(async (req, res, next) => {
     },
     records,
   });
+});
+
+export const getAssignedTokens = asyncHandler(async (req, res) => {
+  requireDoctor(req.user);
+
+  const now = new Date();
+  const tokens = await AccessToken.find({
+    doctor: req.user._id,
+    isRevoked: false,
+    expiresAt: { $gt: now },
+  })
+    .sort({ createdAt: -1 })
+    .populate("patient", "name")
+    .populate("recordIds", "title type recordDate");
+
+  res.json({ tokens });
 });
 

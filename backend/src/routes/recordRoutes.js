@@ -1,6 +1,6 @@
 import express from "express";
 import { protect } from "../middleware/auth.js";
-import { upload, uploadToFirebase } from "../config/firebaseStorage.js";
+import { upload, uploadToCloudinary } from "../config/cloudinaryStorage.js";
 import {
   createRecord,
   deleteRecord,
@@ -19,7 +19,7 @@ router.get("/", getMyRecords);
 router.get("/timeline", getTimeline);
 router.get("/stats", getStats);
 router.get("/:id", getRecord);
-router.post("/", upload.single("file"), uploadToFirebase, createRecord);
+router.post("/", upload.single("file"), uploadToCloudinary, createRecord);
 router.put("/:id", updateRecord);
 router.delete("/:id", deleteRecord);
 
