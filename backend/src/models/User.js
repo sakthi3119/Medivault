@@ -21,6 +21,16 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, trim: true, maxlength: 32 },
     address: { type: String, trim: true, maxlength: 300 },
     isActive: { type: Boolean, default: true },
+
+    // End-to-end encryption (E2EE)
+    // - public key is safe to store and share
+    // - private key must be stored encrypted (wrapped) by the client
+    e2eePublicKeyJwk: { type: mongoose.Schema.Types.Mixed, default: null },
+    e2eeEncryptedPrivateKey: { type: String, default: "" },
+    e2eeKdfSalt: { type: String, default: "" },
+    e2eeKdfIterations: { type: Number, default: 0 },
+    e2eePrivateKeyIv: { type: String, default: "" },
+    e2eeVersion: { type: String, default: "" },
   },
   { timestamps: true }
 );

@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { RECORD_TYPES } from "../utils/recordTypes";
+import { useAuth } from "../context/AuthContext.jsx";
+import { encryptFileE2ee } from "../utils/e2ee";
 
 function ModalShell({ open, onClose, children }) {
   if (!open) return null;
@@ -55,6 +57,9 @@ export function UploadModal({ open, onClose, onUpload }) {
   const [file, setFile] = useState(null);
   const [progress, setProgress] = useState(0);
   const [serverError, setServerError] = useState("");
+  const [stage, setStage] = useState("");
+
+  const { e2ee } = useAuth();
 
   const {
     register,
@@ -79,8 +84,29 @@ export function UploadModal({ open, onClose, onUpload }) {
     setServerError("");
     if (!file) return;
 
+    if (!e2ee?.ready || !e2ee.publicKey) {
+      return setServerError("Encryption keys are locked. Please log out and sign in again.");
+    }
+
+    setStage("encrypting");
+    let encrypted;
+    try {
+      encrypted = await encryptFileE2ee({ file, ownerPublicKey: e2ee.publicKey });
+    } catch (err) {
+      setStage("");
+      return setServerError(err?.message || "Failed to encrypt file.");
+    }
+
     const fd = new FormData();
-    fd.append("file", file);
+    // Important: append encryption metadata BEFORE the file so multer's fileFilter can validate it.
+    fd.append("isEncrypted", "true");
+    fd.append("originalMimeType", file.type);
+    fd.append("originalFileName", file.name);
+    fd.append("originalFileSize", String(file.size));
+    fd.append("encryptionIv", encrypted.encryptionIv);
+    fd.append("wrappedKey", encrypted.wrappedKey);
+    fd.append("file", encrypted.encryptedBlob, file.name);
+
     fd.append("title", values.title);
     fd.append("type", values.type);
     fd.append("description", values.description || "");
@@ -89,6 +115,7 @@ export function UploadModal({ open, onClose, onUpload }) {
     fd.append("recordDate", values.recordDate);
     fd.append("tags", values.tags || "");
 
+    setStage("uploading");
     const res = await onUpload(fd, (evt) => {
       if (!evt.total) return;
       setProgress(Math.round((evt.loaded / evt.total) * 100));
@@ -98,12 +125,14 @@ export function UploadModal({ open, onClose, onUpload }) {
     reset();
     setFile(null);
     setProgress(0);
+    setStage("");
     onClose();
   }
 
   function closeAndReset() {
     setServerError("");
     setProgress(0);
+    setStage("");
     onClose();
   }
 
@@ -170,7 +199,9 @@ export function UploadModal({ open, onClose, onUpload }) {
         </div>
 
         <div className="flex items-center justify-between gap-4">
-          <div className="text-xs text-slate-400">{progress ? `Uploading… ${progress}%` : " "}</div>
+          <div className="text-xs text-slate-400">
+            {stage === "encrypting" ? "Encrypting…" : progress ? `Uploading… ${progress}%` : " "}
+          </div>
           <button className="rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
             Upload
           </button>

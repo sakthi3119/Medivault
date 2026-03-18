@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
 import { useRecords } from "../hooks/useRecords";
+import { useAuth } from "../context/AuthContext.jsx";
+import { wrapRecordKeyForDoctor } from "../utils/e2ee";
 
 function formatExpiry(d) {
   const dt = d ? new Date(d) : null;
@@ -32,6 +34,7 @@ function CopyButton({ text }) {
 
 export default function ShareRecords() {
   const { items: records } = useRecords({ type: "All", search: "", page: 1, limit: 50 });
+  const { e2ee } = useAuth();
   const [tokens, setTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -86,19 +89,67 @@ export default function ShareRecords() {
     setCreatedLink("");
     setError("");
     try {
+      const selectedDoctor = doctors.find((d) => d._id === selectedDoctorId);
+      if (!selectedDoctor) throw new Error("Please select a doctor.");
+
+      async function fetchAllRecordsSnapshot() {
+        let page = 1;
+        const limit = 50;
+        let items = [];
+        // fetch first page to know total pages
+        const first = await api.get("/api/records", { params: { type: "All", search: "", page, limit } });
+        items = items.concat(first.data.items || []);
+        const pages = first.data.pagination?.pages || 1;
+        for (page = 2; page <= pages; page++) {
+          const { data } = await api.get("/api/records", { params: { type: "All", search: "", page, limit } });
+          items = items.concat(data.items || []);
+        }
+        return items;
+      }
+
+      const toShare = allRecords
+        ? await fetchAllRecordsSnapshot()
+        : recordList.filter((r) => selected.has(r._id));
+
+      if (!toShare || toShare.length === 0) {
+        throw new Error("Select at least one record.");
+      }
+
+      const shareRecordIds = toShare.map((r) => r._id);
+      const encryptedRecords = toShare.filter((r) => r.isEncrypted);
+
+      let recordKeys = undefined;
+      if (encryptedRecords.length > 0) {
+        if (!e2ee?.privateKey) throw new Error("Encryption key is locked. Please log out and sign in again.");
+        if (!selectedDoctor.e2eePublicKeyJwk) throw new Error("Selected doctor has not enabled encryption yet.");
+
+        recordKeys = await Promise.all(
+          encryptedRecords.map(async (r) => {
+            if (!r.wrappedKey) throw new Error("Missing encryption metadata for one or more records.");
+            const wrappedForDoctor = await wrapRecordKeyForDoctor({
+              wrappedKeyForOwnerB64: r.wrappedKey,
+              ownerPrivateKey: e2ee.privateKey,
+              doctorPublicKeyJwk: selectedDoctor.e2eePublicKeyJwk,
+            });
+            return { recordId: r._id, wrappedKey: wrappedForDoctor };
+          })
+        );
+      }
+
       const payload = {
         allRecords,
-        recordIds: allRecords ? [] : Array.from(selected),
+        recordIds: shareRecordIds,
         doctorId: selectedDoctorId || undefined,
         label: label || undefined,
         expiresIn,
+        recordKeys,
       };
       const { data } = await api.post("/api/access", payload);
       const url = `${window.location.origin}/shared/${data.token.token}`;
       setCreatedLink(url);
       await loadTokens();
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to create share link.");
+      setError(err?.response?.data?.message || err?.message || "Failed to create share link.");
     } finally {
       setCreating(false);
     }
@@ -228,8 +279,8 @@ export default function ShareRecords() {
             <div className="rounded-2xl border border-slate-800/70 bg-background/25 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold">Select doctor (optional)</div>
-                  <div className="mt-1 text-xs text-slate-400">Choose a registered doctor to associate with this link.</div>
+                  <div className="text-sm font-semibold">Select doctor</div>
+                  <div className="mt-1 text-xs text-slate-400">Required: only this doctor (and you) can open the link.</div>
                 </div>
                 <button
                   type="button"
@@ -270,6 +321,10 @@ export default function ShareRecords() {
                   </label>
                 ))}
               </div>
+
+              {!loadingDoctors && doctors.length > 0 && !selectedDoctorId ? (
+                <div className="mt-3 text-xs text-amber-200">Please select a doctor to create a link.</div>
+              ) : null}
             </div>
 
             <div>
@@ -291,7 +346,7 @@ export default function ShareRecords() {
             <button
               type="button"
               onClick={createLink}
-              disabled={creating || (!allRecords && selected.size === 0)}
+              disabled={creating || (!allRecords && selected.size === 0) || !selectedDoctorId}
               className="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
             >
               {creating ? "Creating…" : "Create link"}

@@ -98,3 +98,46 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
   res.json({ user });
 });
 
+export const setE2eeKeys = asyncHandler(async (req, res, next) => {
+  const {
+    publicKeyJwk,
+    encryptedPrivateKey,
+    kdfSalt,
+    kdfIterations,
+    privateKeyIv,
+    version,
+  } = req.body || {};
+
+  if (!publicKeyJwk || typeof publicKeyJwk !== "object") {
+    return next(new AppError("Invalid public key.", 400));
+  }
+  if (!encryptedPrivateKey || typeof encryptedPrivateKey !== "string") {
+    return next(new AppError("Invalid encrypted private key.", 400));
+  }
+  if (!kdfSalt || typeof kdfSalt !== "string") {
+    return next(new AppError("Invalid key derivation salt.", 400));
+  }
+  const iters = Number(kdfIterations);
+  if (!Number.isFinite(iters) || iters < 10000 || iters > 2000000) {
+    return next(new AppError("Invalid key derivation iterations.", 400));
+  }
+  if (!privateKeyIv || typeof privateKeyIv !== "string") {
+    return next(new AppError("Invalid private key IV.", 400));
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      e2eePublicKeyJwk: publicKeyJwk,
+      e2eeEncryptedPrivateKey: encryptedPrivateKey,
+      e2eeKdfSalt: kdfSalt,
+      e2eeKdfIterations: Math.floor(iters),
+      e2eePrivateKeyIv: privateKeyIv,
+      e2eeVersion: version ? String(version).trim() : "E2EE-v1",
+    },
+    { new: true, runValidators: true }
+  );
+
+  res.json({ user });
+});
+

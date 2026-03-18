@@ -28,7 +28,7 @@ export default function SharedView() {
       setLoading(true);
       setError("");
       try {
-        const res = await api.get(`/api/access/shared/${token}`, { headers: { Authorization: undefined } });
+        const res = await api.get(`/api/access/shared/${token}`);
         setData(res.data);
       } catch (err) {
         setError(err?.response?.data?.message || "Unable to open this share link.");
@@ -96,7 +96,12 @@ export default function SharedView() {
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {records.map((r) => (
-            <RecordCard key={r._id} record={r} onDelete={null} />
+            <RecordCard
+              key={r._id}
+              record={r}
+              onDelete={null}
+              cipherEndpoint={(id) => `/api/access/shared/${token}/cipher/${id}`}
+            />
           ))}
         </div>
 

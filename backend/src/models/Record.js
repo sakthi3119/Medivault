@@ -23,6 +23,13 @@ const recordSchema = new mongoose.Schema(
     fileName: { type: String, required: true, trim: true, maxlength: 255 },
     fileSize: { type: Number, required: true },
     mimeType: { type: String, required: true, trim: true, maxlength: 120 },
+    storageResourceType: { type: String, enum: ["image", "raw"], default: "raw" },
+
+    // E2EE metadata (ciphertext stored on Cloudinary; plaintext never stored)
+    isEncrypted: { type: Boolean, default: false, index: true },
+    encryptionAlg: { type: String, default: "" },
+    encryptionIv: { type: String, default: "" },
+    wrappedKeyOwner: { type: String, default: "" },
     doctorName: { type: String, trim: true, maxlength: 180 },
     hospitalName: { type: String, trim: true, maxlength: 180 },
     recordDate: { type: Date, required: true, index: true },
