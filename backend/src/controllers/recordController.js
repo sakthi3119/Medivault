@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Record, RECORD_TYPES } from "../models/Record.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
-import { getBucket } from "../config/firebaseStorage.js";
+import { deleteFromCloudinary } from "../config/cloudinaryStorage.js";
 
 function requirePatient(user) {
   if (user?.role !== "patient") throw new AppError("This action is only available for patient accounts.", 403);
@@ -142,8 +142,7 @@ export const updateRecord = asyncHandler(async (req, res, next) => {
 async function deleteStoredFile(record) {
   if (!record?.filePublicId) return;
   try {
-    const bucket = getBucket();
-    await bucket.file(record.filePublicId).delete({ ignoreNotFound: true });
+    await deleteFromCloudinary(record.filePublicId, record.mimeType);
   } catch (err) {
     console.error("Storage delete failed:", err?.message || err);
   }

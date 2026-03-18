@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, minlength: 6, select: false },
     role: { type: String, enum: ["patient", "doctor"], default: "patient" },
     specialization: { type: String, trim: true, maxlength: 120 },
+    hospitalName: { type: String, trim: true, maxlength: 180 },
     dateOfBirth: { type: Date },
     bloodGroup: { type: String, trim: true, maxlength: 10 },
     phone: { type: String, trim: true, maxlength: 32 },

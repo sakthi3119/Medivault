@@ -22,6 +22,7 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const avatar = useMemo(() => initials(user?.name), [user?.name]);
+  const isDoctor = user?.role === "doctor";
 
   return (
     <div className="sticky top-0 z-30 border-b border-slate-800/70 bg-background/70 backdrop-blur">
@@ -44,22 +45,26 @@ export function Navbar() {
             >
               Dashboard
             </NavLink>
-            <NavLink
-              to="/timeline"
-              className={({ isActive }) =>
-                `rounded-xl px-3 py-2 text-sm ${isActive ? "bg-surface text-white" : "text-slate-300 hover:text-white"}`
-              }
-            >
-              Timeline
-            </NavLink>
-            <NavLink
-              to="/share"
-              className={({ isActive }) =>
-                `rounded-xl px-3 py-2 text-sm ${isActive ? "bg-surface text-white" : "text-slate-300 hover:text-white"}`
-              }
-            >
-              Share
-            </NavLink>
+            {!isDoctor ? (
+              <>
+                <NavLink
+                  to="/timeline"
+                  className={({ isActive }) =>
+                    `rounded-xl px-3 py-2 text-sm ${isActive ? "bg-surface text-white" : "text-slate-300 hover:text-white"}`
+                  }
+                >
+                  Timeline
+                </NavLink>
+                <NavLink
+                  to="/share"
+                  className={({ isActive }) =>
+                    `rounded-xl px-3 py-2 text-sm ${isActive ? "bg-surface text-white" : "text-slate-300 hover:text-white"}`
+                  }
+                >
+                  Share
+                </NavLink>
+              </>
+            ) : null}
           </nav>
 
           {user?.role ? <RoleBadge role={user.role} /> : null}

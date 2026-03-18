@@ -14,6 +14,7 @@ export const register = asyncHandler(async (req, res, next) => {
     password,
     role = "patient",
     specialization,
+    hospitalName,
     dateOfBirth,
     bloodGroup,
     phone,
@@ -24,6 +25,9 @@ export const register = asyncHandler(async (req, res, next) => {
   if (!["patient", "doctor"].includes(role)) return next(new AppError("Invalid role selected.", 400));
   if (role === "doctor" && !specialization) {
     return next(new AppError("Doctors must provide a specialization.", 400));
+  }
+  if (role === "doctor" && !hospitalName) {
+    return next(new AppError("Doctors must provide a hospital / clinic name.", 400));
   }
 
   const cleanEmail = normalizeEmail(email);
@@ -36,6 +40,7 @@ export const register = asyncHandler(async (req, res, next) => {
     password: String(password),
     role,
     specialization: role === "doctor" ? String(specialization).trim() : undefined,
+    hospitalName: role === "doctor" ? String(hospitalName).trim() : undefined,
     dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
     bloodGroup: bloodGroup ? String(bloodGroup).trim() : undefined,
     phone: phone ? String(phone).trim() : undefined,
@@ -65,7 +70,7 @@ export const getMe = asyncHandler(async (req, res) => {
 });
 
 export const updateProfile = asyncHandler(async (req, res, next) => {
-  const allowed = ["name", "phone", "address", "bloodGroup", "dateOfBirth", "specialization"];
+  const allowed = ["name", "phone", "address", "bloodGroup", "dateOfBirth", "specialization", "hospitalName"];
   const updates = {};
 
   for (const key of allowed) {
@@ -77,11 +82,16 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
   if (updates.address != null) updates.address = String(updates.address).trim();
   if (updates.bloodGroup != null) updates.bloodGroup = String(updates.bloodGroup).trim();
   if (updates.specialization != null) updates.specialization = String(updates.specialization).trim();
+  if (updates.hospitalName != null) updates.hospitalName = String(updates.hospitalName).trim();
   if (updates.dateOfBirth != null) updates.dateOfBirth = updates.dateOfBirth ? new Date(updates.dateOfBirth) : null;
 
-  if (req.user.role !== "doctor") delete updates.specialization;
-  if (req.user.role === "doctor" && updates.specialization === "") {
-    return next(new AppError("Specialization can't be empty for doctor accounts.", 400));
+  if (req.user.role !== "doctor") {
+    delete updates.specialization;
+    delete updates.hospitalName;
+  }
+  if (req.user.role === "doctor") {
+    if (updates.specialization === "") return next(new AppError("Specialization can't be empty for doctor accounts.", 400));
+    if (updates.hospitalName === "") return next(new AppError("Hospital / clinic name can't be empty for doctor accounts.", 400));
   }
 
   const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true });

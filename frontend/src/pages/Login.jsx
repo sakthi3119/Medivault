@@ -19,7 +19,8 @@ export default function Login() {
     setServerError("");
     const res = await login(values.email, values.password);
     if (!res.ok) return setServerError(res.message);
-    navigate("/dashboard");
+    const role = res.user?.role;
+    navigate(role === "doctor" ? "/profile" : "/dashboard");
   }
 
   return (

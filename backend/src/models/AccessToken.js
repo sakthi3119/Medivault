@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const accessTokenSchema = new mongoose.Schema(
   {
     patient: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    doctor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
     token: { type: String, required: true, unique: true, index: true },
     recordIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Record" }],
     allRecords: { type: Boolean, default: false },

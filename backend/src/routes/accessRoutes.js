@@ -1,12 +1,13 @@
 import express from "express";
-import { protect } from "../middleware/auth.js";
-import { accessSharedRecords, createAccessToken, getMyTokens, revokeToken } from "../controllers/accessTokenController.js";
+import { doctorOnly, protect } from "../middleware/auth.js";
+import { accessSharedRecords, createAccessToken, getAssignedTokens, getMyTokens, revokeToken } from "../controllers/accessTokenController.js";
 
 const router = express.Router();
 
 router.get("/shared/:token", accessSharedRecords);
 
 router.use(protect);
+router.get("/assigned", doctorOnly, getAssignedTokens);
 router.post("/", createAccessToken);
 router.get("/", getMyTokens);
 router.patch("/:token/revoke", revokeToken);

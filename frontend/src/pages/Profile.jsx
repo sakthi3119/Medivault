@@ -30,6 +30,8 @@ export default function Profile() {
       address: user?.address || "",
       bloodGroup: user?.bloodGroup || "",
       dateOfBirth: user?.dateOfBirth ? String(user.dateOfBirth).slice(0, 10) : "",
+      specialization: user?.specialization || "",
+      hospitalName: user?.hospitalName || "",
     },
   });
 
@@ -40,6 +42,8 @@ export default function Profile() {
       address: user?.address || "",
       bloodGroup: user?.bloodGroup || "",
       dateOfBirth: user?.dateOfBirth ? String(user.dateOfBirth).slice(0, 10) : "",
+      specialization: user?.specialization || "",
+      hospitalName: user?.hospitalName || "",
     });
   }, [user, reset]);
 
@@ -110,6 +114,30 @@ export default function Profile() {
               {...register("phone")}
             />
           </div>
+
+          {user?.role === "doctor" ? (
+            <div>
+              <label className="text-sm text-slate-200">Specialization</label>
+              <input
+                className="mt-2 w-full rounded-2xl border border-slate-700/70 bg-background/35 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/30"
+                placeholder="Cardiology"
+                {...register("specialization", { required: "Specialization is required for doctors" })}
+              />
+              {errors.specialization ? <div className="mt-1 text-xs text-danger">{errors.specialization.message}</div> : null}
+            </div>
+          ) : null}
+
+          {user?.role === "doctor" ? (
+            <div>
+              <label className="text-sm text-slate-200">Hospital / Clinic</label>
+              <input
+                className="mt-2 w-full rounded-2xl border border-slate-700/70 bg-background/35 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent/30"
+                placeholder="City Care Hospital"
+                {...register("hospitalName", { required: "Hospital / clinic name is required for doctors" })}
+              />
+              {errors.hospitalName ? <div className="mt-1 text-xs text-danger">{errors.hospitalName.message}</div> : null}
+            </div>
+          ) : null}
 
           <div className="md:col-span-2">
             <label className="text-sm text-slate-200">Address</label>

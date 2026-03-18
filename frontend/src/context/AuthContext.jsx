@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.post("/api/auth/login", { email, password });
       setToken(data.token);
       setUser(data.user);
-      return { ok: true };
+      return { ok: true, user: data.user };
     } catch (err) {
       return { ok: false, message: err?.response?.data?.message || "Login failed. Please try again." };
     } finally {
@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.post("/api/auth/register", payload);
       setToken(data.token);
       setUser(data.user);
-      return { ok: true };
+      return { ok: true, user: data.user };
     } catch (err) {
       return { ok: false, message: err?.response?.data?.message || "Registration failed. Please try again." };
     } finally {
