@@ -10,7 +10,7 @@ export const listDoctors = asyncHandler(async (req, res) => {
   requirePatient(req.user);
 
   const doctors = await User.find({ role: "doctor", isActive: true })
-    .select("name email specialization hospitalName")
+    .select("name email specialization hospitalName e2eePublicKeyJwk")
     .sort({ name: 1 });
 
   res.json({ doctors });

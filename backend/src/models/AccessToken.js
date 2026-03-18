@@ -6,6 +6,13 @@ const accessTokenSchema = new mongoose.Schema(
     doctor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
     token: { type: String, required: true, unique: true, index: true },
     recordIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Record" }],
+    // E2EE: per-record file keys wrapped for the assigned doctor
+    recordKeys: [
+      {
+        recordId: { type: mongoose.Schema.Types.ObjectId, ref: "Record", required: true },
+        wrappedKey: { type: String, required: true },
+      },
+    ],
     allRecords: { type: Boolean, default: false },
     doctorEmail: { type: String, trim: true, lowercase: true, maxlength: 190 },
     label: { type: String, trim: true, maxlength: 120 },

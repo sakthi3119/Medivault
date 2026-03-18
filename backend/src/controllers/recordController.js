@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { Record, RECORD_TYPES } from "../models/Record.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
-import { deleteFromCloudinary } from "../config/cloudinaryStorage.js";
+import { deleteFromCloudinary, getSignedCloudinaryUrl } from "../config/cloudinaryStorage.js";
 
 function requirePatient(user) {
   if (user?.role !== "patient") throw new AppError("This action is only available for patient accounts.", 403);
@@ -25,6 +25,30 @@ function pickRecordUpdate(body) {
     else out.tags = String(out.tags).split(",").map((t) => t.trim()).filter(Boolean);
   }
   return out;
+}
+
+function recordToResponse(record) {
+  if (!record) return record;
+  const obj = record.toObject ? record.toObject() : record;
+  const signed = getSignedCloudinaryUrl({
+    publicId: obj.filePublicId,
+    mimetype: obj.mimeType,
+    originalName: obj.fileName,
+    storageResourceType: obj.storageResourceType,
+    expiresInSeconds: 15 * 60,
+  });
+  return {
+    ...obj,
+    fileUrl: signed || obj.fileUrl,
+    ...(obj.isEncrypted
+      ? {
+          isEncrypted: true,
+          encryptionAlg: obj.encryptionAlg || "AES-256-GCM",
+          encryptionIv: obj.encryptionIv,
+          wrappedKey: obj.wrappedKeyOwner,
+        }
+      : { isEncrypted: false }),
+  };
 }
 
 export const getMyRecords = asyncHandler(async (req, res) => {
@@ -67,7 +91,7 @@ export const getMyRecords = asyncHandler(async (req, res) => {
   ]);
 
   res.json({
-    items,
+    items: items.map(recordToResponse),
     pagination: {
       page: pageNum,
       limit: limitNum,
@@ -84,7 +108,37 @@ export const getRecord = asyncHandler(async (req, res, next) => {
 
   const record = await Record.findOne({ _id: id, patient: req.user._id });
   if (!record) return next(new AppError("Record not found.", 404));
-  res.json({ record });
+  res.json({ record: recordToResponse(record) });
+});
+
+export const getRecordCipher = asyncHandler(async (req, res, next) => {
+  requirePatient(req.user);
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) return next(new AppError("Invalid record id.", 400));
+
+  const record = await Record.findOne({ _id: id, patient: req.user._id });
+  if (!record) return next(new AppError("Record not found.", 404));
+
+  const url =
+    getSignedCloudinaryUrl({
+      publicId: record.filePublicId,
+      mimetype: record.mimeType,
+      originalName: record.fileName,
+      storageResourceType: record.storageResourceType,
+      expiresInSeconds: 15 * 60,
+    }) ||
+    record.fileUrl;
+
+  if (!url) return next(new AppError("File not available.", 404));
+
+  const resp = await fetch(url);
+  if (!resp.ok) return next(new AppError("Failed to download file.", 502));
+  const ab = await resp.arrayBuffer();
+  const buf = Buffer.from(ab);
+
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(buf);
 });
 
 export const createRecord = asyncHandler(async (req, res, next) => {
@@ -95,11 +149,22 @@ export const createRecord = asyncHandler(async (req, res, next) => {
   if (!RECORD_TYPES.includes(type)) return next(new AppError("Invalid record type.", 400));
   if (!req.file) return next(new AppError("Please upload a file (PDF, image, or DOCX).", 400));
 
+  const isEncrypted = req.body?.isEncrypted === true || req.body?.isEncrypted === "true" || req.body?.isEncrypted === "1";
+  const encryptionIv = isEncrypted ? String(req.body?.encryptionIv || "").trim() : "";
+  const wrappedKeyOwner = isEncrypted ? String(req.body?.wrappedKey || "").trim() : "";
+  if (isEncrypted) {
+    if (!encryptionIv) return next(new AppError("Missing encryption IV.", 400));
+    if (!wrappedKeyOwner) return next(new AppError("Missing wrapped encryption key.", 400));
+  }
+
   const fileUrl = req.file.path;
   const filePublicId = req.file.filename;
-  const fileName = req.file.originalname;
-  const fileSize = req.file.size;
-  const mimeType = req.file.mimetype;
+  const fileName = isEncrypted ? String(req.body?.originalFileName || req.file.originalname || "file").trim() : req.file.originalname;
+  const fileSize = isEncrypted
+    ? Math.max(parseInt(String(req.body?.originalFileSize || "0"), 10) || 0, 0)
+    : req.file.size;
+  const mimeType = isEncrypted ? String(req.body?.originalMimeType || "application/octet-stream").trim() : req.file.mimetype;
+  const storageResourceType = req.file._cloudinaryResourceType || "raw";
 
   const record = await Record.create({
     patient: req.user._id,
@@ -111,6 +176,11 @@ export const createRecord = asyncHandler(async (req, res, next) => {
     fileName,
     fileSize,
     mimeType,
+    storageResourceType,
+    isEncrypted,
+    encryptionAlg: isEncrypted ? "AES-256-GCM" : "",
+    encryptionIv: isEncrypted ? encryptionIv : "",
+    wrappedKeyOwner: isEncrypted ? wrappedKeyOwner : "",
     doctorName: doctorName ? String(doctorName).trim() : undefined,
     hospitalName: hospitalName ? String(hospitalName).trim() : undefined,
     recordDate: new Date(recordDate),
@@ -122,7 +192,7 @@ export const createRecord = asyncHandler(async (req, res, next) => {
           .filter(Boolean),
   });
 
-  res.status(201).json({ record });
+  res.status(201).json({ record: recordToResponse(record) });
 });
 
 export const updateRecord = asyncHandler(async (req, res, next) => {
@@ -136,13 +206,13 @@ export const updateRecord = asyncHandler(async (req, res, next) => {
     runValidators: true,
   });
   if (!record) return next(new AppError("Record not found.", 404));
-  res.json({ record });
+  res.json({ record: recordToResponse(record) });
 });
 
 async function deleteStoredFile(record) {
   if (!record?.filePublicId) return;
   try {
-    await deleteFromCloudinary(record.filePublicId, record.mimeType);
+    await deleteFromCloudinary(record.filePublicId, record.mimeType, record.storageResourceType);
   } catch (err) {
     console.error("Storage delete failed:", err?.message || err);
   }
@@ -174,7 +244,6 @@ export const getTimeline = asyncHandler(async (req, res) => {
         doctorName: 1,
         hospitalName: 1,
         recordDate: 1,
-        fileUrl: 1,
         year: { $year: "$recordDate" },
         month: { $month: "$recordDate" },
       },
@@ -223,7 +292,7 @@ export const getStats = asyncHandler(async (req, res) => {
 
   res.json({
     byType: byType.map((x) => ({ type: x._id, count: x.count })),
-    recent,
+    recent: recent.map(recordToResponse),
   });
 });
 

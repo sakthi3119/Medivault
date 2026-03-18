@@ -14,11 +14,46 @@ import { AppError } from "./utils/appError.js";
 
 const app = express();
 
+const isProd = process.env.NODE_ENV === "production";
+
+function getAllowedOrigins() {
+  const urls = [];
+  const single = process.env.CLIENT_URL;
+  const multi = process.env.CLIENT_URLS;
+
+  if (typeof multi === "string" && multi.trim()) {
+    urls.push(
+      ...multi
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+  }
+
+  if (typeof single === "string" && single.trim()) {
+    urls.push(single.trim());
+  }
+
+  return Array.from(new Set(urls));
+}
+
 app.set("trust proxy", 1);
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL ? [process.env.CLIENT_URL] : true,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+
+      const allowed = getAllowedOrigins();
+      if (allowed.includes(origin)) return cb(null, true);
+
+      if (!isProd) {
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+        if (isLocalhost) return cb(null, true);
+      }
+
+      return cb(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
@@ -26,8 +61,6 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (req, res) => res.json({ ok: true }));
-
-const isProd = process.env.NODE_ENV === "production";
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isProd ? 100 : 5000,
